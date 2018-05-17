@@ -1,0 +1,206 @@
+---
+title: "Devoir 3"
+author: "Jeremy Uzan & Raphaël Poix"
+date: "20 décembre 2017"
+output: html_document
+---
+
+###Présentation du problème
+
+<div style="text-align:justify">
+
+1. **Estimation des paramètres**
+Le jeu de données ozone contient deux variables qualitatives : le vent et la pluie. La première partie consistera à étudier l'impact de ces variables sur la concentration d'ozone. 
+2. **Sélection des variables pertinentes**
+Le jeu de données ozone contient de nombreuses variables explicatives. Le but de la seconde partie est d'appliquer des critères classiques de sélection de variables pour en choisir les plus pertinentes afin d'expliquer la concentration d'ozone. Dans cette partie on met de côté les variables qualitatives et on se concentre sur les variables quantitatives uniquement.
+3. **Prévision**
+La troisième partie consiste à observer si nous pouvons prévoir  des nouvelles observations de la concentration d'ozone à partir de certaines variables pertinentes sélectionnées en partie 2 ; nous comparerons l’erreur de prévision obtenue par chaque modèle.
+
+</div>
+
+###Variables et notations
+
+<ul style="list-style-type:circle">
+  <li>maxO3 : Concentration maximale en ozone, quantité à prédire</li>
+  <li>T9, T12, T15 : Informations sur la température</li>
+  <li>Ne9, Ne12, Ne15: Informations sur la nébulosité</li>
+  <li>Vx9, Vx12, Vx15 : Informations sur la puissance du vent</li>
+  <li>maxO3v : Concentration maximale en ozone la veille</li>
+  <li>vent : Direction du vent (Nord/Sud/Est/Ouest)</li>
+  <li>pluie : Temps (sec ou humide)</li>
+</ul>
+
+
+```{r import,echo=F}
+install.packages("leaps")
+library(leaps)
+```
+
+```{r param,echo=F}
+ozone <- c()
+```
+
+```{r data,echo=F}
+ozone <- read.table("ozone.txt", header=T)
+
+model <- lm(maxO3~. ,data=ozone)
+summary(model)
+attach(ozone)
+```
+
+#La météo joue-t-elle un rôle important dans la concentration maximale en ozone de l'air ?
+<div style="text-align:justify">
+
+Le but de cette partie est d'analyser les effets liés à la météo sur la concentration maximale d'ozone. Nous voulons savoir si le vent et la pluie joue un rôle important, et également si leur effet est corrélé.
+
+</div>
+
+##Représentations graphiques
+
+<table>
+<tr>
+<td style="width:50%">
+
+```{r boxplot maxO3 vs vent & pluie, echo = F}
+par(mfrow = c(1,2), mar = c(5, 4, 4, 2) + 0.2,bg='beige')
+plot(maxO3~vent, xlab = "Vent", ylab = "MaxO3" , main= 'MaxO3 en fonction\n du vent',las = 3)
+plot(maxO3~pluie, xlab = "Pluie", ylab = "MaxO3" , main= 'MaxO3 en fonction\n de la pluie',las = 3)
+```
+
+</td>
+<td>
+<div style="text-align:justify ; margin-left:20px">
+
+On peut déjà remarquer que le par temps sec, la concentration en O3 est en moyenne plus élevée que par temps de pluie, et également beaucoup plus étendue. Si on s'attarde maintenant sur les effets du vent, on peut voir une différence significative sur la concentration maximale moyenne d'ozone.
+même forme des boxplots, le vent d'est donne une concentration d'ozone plus importante, puis le vent sud, vent nord et ouest donne une concentraiton d'ozone globalement identique
+
+On observe une certaine différence entre les médianes par groupe, un temps sec donne une concentration d'ozone nettement plus grande avec une mediane à 95, contre une médiane à 70 pour un temps pluvieux 
+On note que la concentration d'ozone est très centrée en temps de pluie, comme si la pluie stabilisait la concentration d'ozone à 70 
+
+</div>
+</td>
+</tr>
+
+<tr>
+
+<td style="width:50%">
+```{r with maxO3 vs vent & pluie, echo=F}
+par(bg='beige')
+with( model ,interaction.plot(vent,pluie,maxO3,main="Effets corrélés de la météo sur maxO3",ylab="Moyenne maxO3"))
+```
+</td>
+<td>
+
+<div style="text-align:justify; margin-left:20px">
+
+L'effet de la pluie et de la direction du vent sur l'ozone semble présent, sinon les deux courbes ci-contre devraient être identiques. Néanmoins, on remarque que leur allures sont similaires. L'analyse de la variance nous permettra de répondre à cette interrogation.
+
+</div>
+
+</td>
+</tr>
+</table>
+
+##Analyse de la variance
+
+
+
+```{r modeles,echo=F}
+mod_vent_pluie = lm(maxO3~vent*pluie)
+anova(mod_vent_pluie)
+```
+
+<div style="text-align:justify">
+
+Après avoir effectué une analyse de la variance, on remarque que le vent et la pluie jouent un rôle important sur la valeur maxO3. La p-value des test est en effet pour ces deux facteurs très faible : environ $0.01$ pour le vent et de l'ordre de $10^{-6}$ pour la pluie. pour l'intéraction, la p-value de ce test étant d'environ $0.6$, donc l'effet d'interaction n'est pas significatif du tout. Les deux facteurs sont donc significatifs, et non corrélés.
+
+####Le modèle avec les facteurs pluie et vent sans interaction est le plus pertinents parmi tous les modèles considérés.
+
+
+</div>
+
+#Création du modèle
+
+<div style="text-align:justify">
+
+Dans cette partie, nous allons nous intéresser à la selection des variables explicatives, c'est-à-dire celles qui influencent la quantité maxO3 dans nos observations. Nous comparerons différentes méthodes de sélection afin d'affiner le plus possible nos prédictions. 
+
+</div>
+
+##Sélection des variables
+
+<div style="text-align:justify">
+
+Le but ici est d'utiliser les différents critères de sélection de variables, à savoir le $C_p$ de Mallows, ainsi que les coefficients de détermination $R^2$, coefficient de détermination, et $R^2_{a}$ coefficient de détermination ajusté, et le Bayesian Information Criterion (BIC). Observons les résultats obtenus :
+
+</div>
+
+```{r,fig.width =9,fig.height=8,echo=F}
+mod = lm(maxO3~.,data = ozone)
+a = regsubsets(maxO3~.,data=ozone,int=T,nbest=,nvmax=,method='exh')
+resume = summary(a)
+size <- as.double(rownames(resume$wh))+1
+par (mfrow= c(2,2),bg='beige')
+plot(a,scale="Cp",main='Sélection des variables : Cp')
+plot(a,scale="r2",main='Sélection des variables : R2')
+plot(a,scale="adjr2",main="Sélection des variables : R2 ajusté")
+plot(a,scale="bic",main='Sélection des variables : BIC')
+```
+
+<div style="text-align:justify">
+
+Les résultats des test $C_p$, $R^2_a$ et BIC sont similaires : les trois méthodes sélectionnent les mêmes variables explicatives (T12, Ne9, Vx9, maxO3v). Le critère $R_2$ sélectionne également les variables qualitatives vent et pluie ainsi que Vx15. Ce critère étant reconnu comme moins pertinent que les trois autres, nous choisirons de ne pas l'utiliser.
+
+</div>
+
+##Prédiction
+
+<div style="text-align:justify">
+
+Maintenant que nous avons sélectionné les variables explicatives influentes sur notre modèle, nous allons essayer de prédire la concentration d'ozone à venir.
+
+</div>
+
+```{r, echo=F}
+model_bic <- lm(maxO3~cbind(maxO3v,T12,Ne9,Vx9))
+Y_predict = predict(model_bic,ozone)
+X = seq(-10,10,by = 0.1)
+n = length(X)
+par(bg='beige')
+plot(seq(-10,10, length=length(Y_predict)),
+     Y_predict, lwd = 2, col=2, type="l",
+     ylim = c(min(maxO3), max(maxO3)),
+     xlab='temps',ylab='maximum O3',main='Prédiction : modèle BIC')
+
+points(seq(-10,10, length=length(Y_predict)),
+       maxO3, type = 'b', lwd = 1, col = 1, pch = 1, lty = 2)
+
+#lines( seq(-10,10, length=length(Y_predict)) , Y_predict , lwd = 2)
+
+legend('topright', c('estimation','observations'),
+       col = c('darkred','grey'), 
+       lwd = c(2,1,2), pch = c(-1,1,-1), lty = c(1,2,1))
+grid()
+```
+
+<div style="text-align:justify">
+
+On voit qu'on arrive bien à prédire maxO3 à partir de ces 4variables : Température à 12h, Nébulosité à 9heure, vent à 9H et ozone maximale de la veille. La courbe d'estimation s'aligne correctement sur les points d'observation.
+
+</div>
+
+#En résumé
+
+<div style="text-align:justify">
+
+Dans des modèles à "tendance", il est possible d'obtenir des prévisions assez précises d'une variable grâce à d'autres variables explicatives. Ces variables explicatives ne sont pas choisies au hasard ; nous venons d'étudier une méthode pour les extraire dans cet exercice. 
+
+Notons que si T12, N9 et Vx9 permettent de prédire maxO3, il est nécessaire de connaître les valeurs que vont prendre ces 3 variables dans le futur pour avoir une prévision assez juste de l'ozone dans le futur. 
+De ce fait, la prédiction dans 2 mois est possible sous réserve de connaître la température à 12h, la nébulosité à 9 et le vent à 9h dans 2 mois. Pour ces raisons, on peut dire que cette méthode fonctionne pour des modèles à tendance; pour des modèles plus complexes comme des produits financiers ou tout autre modèle à forte volatilité, la méthode prédictive étudiée est moins fonctionnelle, notamment sur le moyen terme.
+
+Autre remarque intéressante: d'après les évènements passés, les saisons, l'histoire, il est assez raisonnable d'imaginer que la température dans 2 mois (par exemple février 2018) sera proche de la moyenne des températures qu'il y a eu en février des 10 dernières années. 
+Mais on voit bien ici que ceci est aussi une forme de prévision, et qu'on aurait très bien pu également observer la concentration moyenne d'ozone au mois de fevrier des 10 dernières années pour prédire la concentration d'ozone au mois de fevrier 2018. 
+
+Tout cela pour rappeler que les modèles statistiques ne sont que des prévisions, qu'il faut les utiliser avec précaution, qu'il ne reflète la réalité que sous un certain angle. 
+
+</div>
